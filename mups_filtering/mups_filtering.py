@@ -53,7 +53,7 @@ def nearest_value_signal_correction(telem):
     """ Use a nearest value algorithm to determine the true thermistor signal
 
     Args:
-        telem (iterable): Iterable over which to apply the correction algorithm.
+        telem (iterable): Iterable over which to apply the correction algorithm
 
     Returns:
         (ndarray): Corrected signal
@@ -71,15 +71,107 @@ def nearest_value_signal_correction(telem):
         telem_temp = telem[n + 1]
         new_temp = correct_temperature(telem_temp)
 
-        if abs(corrected_temp - telem_temp) < abs(corrected_temp - new_temp):
-            # If the difference between the previous value and the uncorrected temperature is less than the difference
-            # between the previous value and the corrected temperature, use the uncorrected temperature.
-            corrected_temp = telem_temp
-        else:
+        if abs(corrected_temp - telem_temp) > abs(corrected_temp - new_temp):
             # If the difference between the previous value and the uncorrected temperature is larger than the difference
             # between the previous value and the corrected temperature, use the corrected temperature.
             corrected_temp = new_temp
 
+        else:
+            # If the difference between the previous value and the uncorrected temperature is less than the difference
+            # between the previous value and the corrected temperature, use the uncorrected temperature.
+            corrected_temp = telem_temp
+
         corrected_temps.append(corrected_temp)
 
+    return
+
+
+def nearest_median_value_signal_correction(telem, num_points=5):
+    """ Use a nearest median value algorithm to determine the true thermistor signal
+
+    Args:
+        telem (iterable): Iterable over which to apply the correction algorithm
+        num_points (int): Number of prior points to use to determine prior median value to compare against
+
+    Returns:
+        (ndarray): Corrected signal
+
+    NOTE: This algorithm works best if the input array starts `num_points` known good values, with several good data
+        values following the starting value.
+
+    """
+    corrected_temps = []
+    corrected_temps.extend(telem[:5])
+
+    for n in np.arange(num_points, len(telem), 1):
+        previous_median = np.median(corrected_temps[(n - num_points):n])
+        telem_temp = telem[n]
+        new_temp = correct_temperature(telem_temp)
+
+        if abs(previous_median - telem_temp) > abs(previous_median - new_temp):
+            # If the difference between the previous value and the uncorrected temperature is larger than the difference
+            # between the previous value and the corrected temperature, use the corrected temperature.
+            next_temp = new_temp
+
+
+        else:
+            # If the difference between the previous value and the uncorrected temperature is less than the difference
+            # between the previous value and the corrected temperature, use the uncorrected temperature.
+            next_temp = telem_temp
+
+        corrected_temps.append(next_temp)
+
     return corrected_temps
+
+
+def nearest_weighted_median_value_signal_correction(telem, num_points=5, weight=2):
+    """ Use a nearest median value algorithm to determine the true thermistor signal
+
+    Args:
+        telem (iterable): Iterable over which to apply the correction algorithm
+        num_points (int): Number of prior points to use to determine prior median value to compare against
+
+    Returns:
+        (ndarray): Corrected signal
+
+    NOTE: This algorithm works best if the input array starts `num_points` known good values, with several good data
+        values following the starting value.
+
+    """
+    corrected_temps = []
+    corrected_temps.extend(telem[:num_points])
+
+    for n in np.arange(num_points, len(telem), 1):
+        previous_median = np.median(corrected_temps[(n - num_points):n])
+        telem_temp = telem[n]
+        new_temp = correct_temperature(telem_temp)
+
+        if abs(previous_median - telem_temp) > weight * abs(previous_median - new_temp):
+            # If the difference between the median of the n previous values and the uncorrected temperature is larger
+            # than `weight` x the difference between the median of the n previous values and the corrected temperature,
+            # use the corrected temperature.
+            #
+            # This use of a weighting factor tends to favor choosing dropped out telemetry over corrected telemetry,
+            # which mitigates the tendency for partial drop outs to cause higher-than-actual corrected values to be
+            # chosen. Since dropped out telemetry will be masked in the fitting process, this is an acceptable trade.
+            next_temp = new_temp
+
+        else:
+            # If the difference between the previous value and the uncorrected temperature is less than the difference
+            # between the previous value and the corrected temperature, use the uncorrected temperature.
+            next_temp = telem_temp
+
+        corrected_temps.append(next_temp)
+
+    return corrected_temps
+
+
+
+
+
+
+
+
+
+
+
